@@ -32,10 +32,8 @@ create or replace view public.contador_assinaturas as
 -- 4. Row Level Security
 alter table public.assinaturas enable row level security;
 
---    Leitura da contagem liberada a todos (somente a view precisa)
-drop policy if exists "le_contagem_publica" on public.contador_assinaturas;
-create policy"le_contagem_publica" on public.contador_assinaturas
-  for select using (true);
+--    (A view contador_assinaturas roda com os privilégios do dono e não
+--    precisa/aceita policy própria — policies só existem em tabelas.)
 
 --    Insert controlado (qualquer um pode assinar, com regras de unicidade
 --    já garantidas pelos índices únicos acima)
