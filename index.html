@@ -222,7 +222,7 @@ function animateCount(from, to){
    Se falhar: mostra "—" e botão tentar novamente. NUNCA inventa.
    ========================================================== */
 async function loadCount(quiet){
-  if (!CONFIG.SUPABASE_URL.includes("@@")){
+  if (CONFIG.SUPABASE_URL.includes("@@")){
     countEl.textContent = "—";
     countEl.classList.add("loading");
     showStatus("Configure o SUPABASE_URL e SUPABASE_KEY no arquivo index.html.", "err");
