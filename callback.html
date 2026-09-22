@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Confirmando sua assinatura…</title>
+<style>
+  body{font-family:system-ui,sans-serif;background:#0b1018;color:#e8eef7;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:20px;text-align:center}
+  .box{max-width:480px;background:#141c2b;border:1px solid #26324a;border-radius:16px;padding:32px}
+  .ok{color:#22c55e}.err{color:#ff4d4d}.info{color:#38bdf8}
+  h1{font-size:1.4rem;margin-bottom:10px}
+  a{color:#38bdf8}
+</style>
+</head>
+<body>
+<div class="box" id="box"><h1 class="info">Confirmando sua assinatura…</h1><p>Processando o retorno do gov.br. Aguarde.</p></div>
+<script>
+const CONFIG = {
+  SUPABASE_URL: "@@SUPABASE_URL@@",
+  SUPABASE_KEY:  "@@SUPABASE_KEY@@",
+  GOVBR_TOKEN_URL: "https://acesso.gov.br/api/authorization-server/oauth/token" // ajuste se oficial
+};
+const box = document.getElementById("box");
+
+(async () => {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get("code");
+  const state = params.get("state");
+  const pend = JSON.parse(sessionStorage.getItem("pb_pending_sign") || "null");
+
+  if (!code || !pend){ box.innerHTML = '<h1 class="err">⛔ Falha na confirmação.</h1><p>Retorne à página e tente novamente.</p>'; return; }
+
+  let nome = pend.nome, cpf = pend.cpf, email = pend.email, sub = null;
+
+  try {
+    // 1) Troca o code por token (OAuth2 authorization_code)
+    // Em produção, essa troca DEVE ocorrer num servidor (Edge Function),
+    // pois expõe o client_secret. Aqui documentamos o fluxo.
+    const tokenRes = await fetch(CONFIG.GOVBR_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: new URL((document.location.origin + "/callback.html")).href,
+        client_id: new URL((document.location.origin)).hostname // substituir pelo client_id real
+      })
+    });
+    const tok = await tokenRes.json();
+    // 2) IdToken contém claims (inclusive 'sub'). Decodifique o payload JWT.
+    if (tok.id_token){
+      const payload = JSON.parse(atob(tok.id_token.split(".")[1]));
+      sub = payload.sub;
+    }
+    // 3) Registra com unicidade por cpf e por sub
+    const headers = { "Content-Type":"application/json", "apikey":CONFIG.SUPABASE_KEY,
+      "Authorization":"Bearer "+CONFIG.SUPABASE_KEY, "Prefer":"return=representation" };
+    const res = await fetch(CONFIG.SUPABASE_URL+"/rest/v1/assinaturas", {
+      method:"POST", headers,
+      body: JSON.stringify({ nome, cpf: cpf || null, email: email || null, govbr_sub: sub || null })
+    });
+    if (res.status === 409){ box.innerHTML='<h1 class="ok">🎉 Você já tinha assinado!</h1><p>Sua assinatura foi contabilizada uma única vez. <a href="./">Voltar</a></p>'; }
+    else if (res.ok){ box.innerHTML='<h1 class="ok">✅ Assinatura confirmada!</h1><p>Obrigado por participar. <a href="./">Voltar à página</a> e compartilhar.</p>'; }
+    else { box.innerHTML='<h1 class="err">⛔ Não foi possível confirmar.</h1><p>Tente novamente.</p>'; }
+  } catch(e){
+    box.innerHTML = '<h1 class="err">⛔ Erro na confirmação.</h1><p>' + e.message + '</p><p><a href="./">Tentar de novo</a></p>';
+  }
+})();
+</script>
+</body>
+</html>
