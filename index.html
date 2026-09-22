@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>PB: Não ao cartório de 8.000% — Contra a Lei 14.343/2026</title>
-<meta name="description" content="Denuncie e assine o abaixo-assinado contra os aumentos abusivos de até 8000% nas taxas cartorárias da Paraíba (Lei 14.343/2026). Assinatura gratuita, online e limitada a 1 por CPF/conta gov.br." />
+<meta name="description" content="Denuncie e assine o abaixo-assinado contra os aumentos abusivos de até 8000% nas taxas cartorárias da Paraíba (Lei 14.343/2026). Assinatura gratuita, online e limitada a 1 por CPF." />
 <meta property="og:title" content="PB: Não ao cartório de 8.000%" />
 <meta property="og:description" content="Assine e pressione a revogação da Lei 14.343/2026. Assinatura gratuita e online." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -135,26 +135,22 @@
     <button id="retryBtn" class="btn btn-ghost hidden">🔄 Tentar novamente</button>
 
     <div class="gov-badge" style="margin-top:14px">
-      🔐 Confirmação de identidade via <b>gov.br</b> (Login Único) — gratuita, sem cartório
+      🔒 Assinatura única por CPF — sem cadastro, sem cartório
     </div>
 
     <div id="status" class="status" role="status" aria-live="polite"></div>
 
     <form id="signForm" novalidate>
       <div>
-        <label for="nome">Nome completo *</label>
+        <label for="nome">Nome completo (nome e sobrenome) *</label>
         <input id="nome" name="nome" type="text" required placeholder="Ex.: Maria da Silva" autocomplete="name" />
       </div>
       <div>
-        <label for="cpf">CPF (opcional — garante que você assine apenas 1 vez; somente dígitos)</label>
-        <input id="cpf" name="cpf" type="text" inputmode="numeric" maxlength="11" placeholder="00000000000" autocomplete="off" />
+        <label for="cpf">CPF *</label>
+        <input id="cpf" name="cpf" type="text" inputmode="numeric" maxlength="11" required placeholder="00000000000" autocomplete="off" />
       </div>
-      <div>
-        <label for="email">E-mail (opcional — não será exibido)</label>
-        <input id="email" name="email" type="email" placeholder="voce@email.com" autocomplete="email" />
-      </div>
-      <button class="btn btn-primary" type="submit" style="justify-content:center" id="submitBtn">Assinar com gov.br →</button>
-      <p class="privacy" id="privacyText">Ao assinar, você confirma ser maior de 18 anos, aceita nossa política de privacidade e entende que os dados são usados apenas para contabilizar e validar sua assinatura (1 por CPF/conta gov.br). Nenhum dado é vendido. ✋</p>
+      <button class="btn btn-primary" type="submit" style="justify-content:center" id="submitBtn">Assinar agora ✍️</button>
+      <p class="privacy" id="privacyText">Ao assinar, você confirma ser maior de 18 anos, aceita nossa política de privacidade e entende que seu nome e CPF são usados apenas para contabilizar e validar sua assinatura (1 assinatura por CPF). Nenhum dado é vendido. ✋</p>
     </form>
   </section>
 
@@ -183,12 +179,8 @@
    ========================================================== */
 const CONFIG = {
   SUPABASE_URL: "https://kfksanqszpjhoeeysfnx.supabase.co",   // ex.: https://xyz.supabase.co
-  SUPABASE_KEY:  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtma3NhbnFzenBqaG9lZXlzZm54Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwMzU4MzEsImV4cCI6MjEwNTYxMTgzMX0.8wdSetspyE4IgRhQKurt1ySK9Ucq-6aYhRd_P7OGCds",  // anon public key do projeto
-  GOVBR_CLIENT_ID: "@@GOVBR_CLIENT_ID@@", // do app no gov.br developer
-  GOVBR_REDIRECT_URI: "@@GOVBR_REDIRECT_URI@@" // ex.: https://seuprojeto.vercel.app/callback.html
+  SUPABASE_KEY:  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtma3NhbnFzenBqaG9lZXlzZm54Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwMzU4MzEsImV4cCI6MjEwNTYxMTgzMX0.8wdSetspyE4IgRhQKurt1ySK9Ucq-6aYhRd_P7OGCds"  // anon public key do projeto
 };
-
-const hasGov = CONFIG.GOVBR_CLIENT_ID.startsWith("client") || !CONFIG.GOVBR_CLIENT_ID.includes("@@");
 
 /* ==========================================================
    ESTADO
@@ -278,7 +270,7 @@ setInterval(() => loadCount(true), 30000);
    VALIDAÇÃO DE CPF (dígitos verificadores)
    ========================================================== */
 function validaCPF(cpf){
-  if (!cpf) return true; // opcional
+  if (!cpf) return false; // obrigatório
   cpf = cpf.replace(/\D/g, "");
   if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
   let soma = 0;
@@ -292,30 +284,9 @@ function validaCPF(cpf){
 }
 
 /* ==========================================================
-   FLUXO GOV.BR (Rota A — OAuth Login Único p/ confirmar identidade)
-   A API oficial de Assinatura Eletrônica GOV.BR (validade plena,
-   PKCS#7) exige domínio oficial + Gestor Público (Portaria
-   SGD/MGI 7.076/2024). Para esta landing page cidadã usamos a conta
-   gov.br via OAuth apenas para confirmar identidade. A unicidade é
-   garantida por CPF E por govbr_sub no banco.
-   ========================================================== */
-function govLoginUrl(nome, cpf){
-  const state = btoa(JSON.stringify({ nome, cpf }));
-  const p = new URLSearchParams({
-    response_type: "code",
-    client_id: CONFIG.GOVBR_CLIENT_ID,
-    redirect_uri: CONFIG.GOVBR_REDIRECT_URI,
-    scope: "openid email",
-    state,
-    nonce: Math.random().toString(36).slice(2)
-  });
-  return "https://sso.acesso.gov.br/authorize?" + p.toString();
-}
-
-/* ==========================================================
    REGISTRO DA ASSINATURA (com checagem de duplicidade)
    ========================================================== */
-async function registerSign(payload, govbr_sub){
+async function registerSign(payload){
   const headers = {
     "Content-Type": "application/json",
     "apikey": CONFIG.SUPABASE_KEY,
@@ -324,23 +295,21 @@ async function registerSign(payload, govbr_sub){
   };
 
   // 1) Antes de inserir, verifico se o CPF já assinou
-  if (payload.cpf){
-    const check = await fetch(
-      `${CONFIG.SUPABASE_URL}/rest/v1/assinaturas?cpf=eq.${payload.cpf}&select=id`,
-      { headers }
-    );
-    const exist = await check.json();
-    if (Array.isArray(exist) && exist.length > 0){
-      showStatus("Este CPF já assinou. Sua assinatura foi contabilizada uma única vez. Obrigado! 🎉", "info");
-      return "duplicate";
-    }
+  const check = await fetch(
+    `${CONFIG.SUPABASE_URL}/rest/v1/assinaturas?cpf=eq.${payload.cpf}&select=id`,
+    { headers }
+  );
+  const exist = await check.json();
+  if (Array.isArray(exist) && exist.length > 0){
+    showStatus("Este CPF já assinou. Sua assinatura foi contabilizada uma única vez. Obrigado! 🎉", "info");
+    return "duplicate";
   }
 
   // 2) Insere — o banco também garante unicidade via índice único (defesa em profundidade)
   const res = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/assinaturas`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ ...payload, govbr_sub: govbr_sub || null })
+    body: JSON.stringify(payload)
   });
 
   if (res.status === 409){
@@ -362,27 +331,19 @@ form.addEventListener("submit", async (e) => {
   e.preventDefault();
   clearStatus();
 
-  const nome = document.getElementById("nome").value.trim();
+  const nome = document.getElementById("nome").value.trim().replace(/\s+/g, " ");
   const cpf  = document.getElementById("cpf").value.trim();
-  const email = document.getElementById("email").value.trim();
 
   // Validações
-  if (!nome){ showStatus("Informe seu nome completo.", "err"); document.getElementById("nome").focus(); return; }
+  if (nome.split(" ").length < 2){ showStatus("Informe nome e sobrenome.", "err"); document.getElementById("nome").focus(); return; }
   if (!validaCPF(cpf)){ showStatus("CPF inválido. Confira os 11 dígitos.", "err"); document.getElementById("cpf").focus(); return; }
 
-  const payload = { nome, cpf: cpf.replace(/\D/g,"") || null, email: email || null };
+  const payload = { nome, cpf: cpf.replace(/\D/g,"") };
 
-  // Se não configurou gov.br, registra direto (unicidade via CPF)
-  if (!hasGov){
-    const r = await registerSign(payload, null);
-    if (r === "ok"){ showStatus("✅ Assinatura registrada com sucesso! Envie para amigos e redes sociais.", "ok"); submitBtn.disabled = true; loadCount(true); }
-    return;
-  }
-
-  // Com gov.br configurado: redireciona para autenticar
-  showStatus("Você será redirecionado ao gov.br para confirmar sua identidade e assinar.", "info");
-  sessionStorage.setItem("pb_pending_sign", JSON.stringify(payload));
-  window.location.href = govLoginUrl(nome, cpf);
+  submitBtn.disabled = true;
+  const r = await registerSign(payload);
+  if (r === "ok"){ showStatus("✅ Assinatura registrada com sucesso! Envie para amigos e redes sociais.", "ok"); loadCount(true); }
+  else { submitBtn.disabled = false; }
 });
 </script>
 </body>

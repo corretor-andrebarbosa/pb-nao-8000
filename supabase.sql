@@ -1,29 +1,20 @@
 -- =====================================================
 -- PB: Não ao cartório de 8.000%
 -- Script completo do banco (Supabase Postgres)
--- Garante UNICIDADE por CPF E por conta gov.br
+-- Assinatura = nome + CPF. Garante UNICIDADE por CPF.
 -- =====================================================
 
 -- 1. Tabela principal
 create table if not exists public.assinaturas (
   id uuid primary key default gen_random_uuid(),
   nome text not null,
-  email text,
-  cpf text,                 -- opcional, somente dígitos
-  govbr_sub text,           -- identificador único da conta gov.br
+  cpf text not null,        -- somente dígitos
   criado_em timestamptz not null default now()
 );
 
--- 2. Índices de unicidade (defesa em profundidade)
---    Uma assinatura por CPF (quando informado)
+-- 2. Índice de unicidade (defesa em profundidade — 1 assinatura por CPF)
 create unique index if not exists assinaturas_cpf_uniq
-  on public.assinaturas (cpf)
-  where cpf is not null;
-
---    Uma assinatura por conta gov.br (quando autenticado)
-create unique index if not exists assinaturas_govbr_uniq
-  on public.assinaturas (govbr_sub)
-  where govbr_sub is not null;
+  on public.assinaturas (cpf);
 
 -- 3. View de contagem REAL (o frontend lê exatamente daqui)
 create or replace view public.contador_assinaturas as
